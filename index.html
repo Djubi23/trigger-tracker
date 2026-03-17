@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trigger Tracker — GrowthRadar</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;background:#0d1117;color:#e2f0eb;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:20px}
+#app{width:100%;max-width:440px;background:#0d1117;border-radius:16px;border:1px solid #1a2e28;overflow:hidden;position:relative}
+.radar-bg{position:absolute;top:-80px;left:50%;transform:translateX(-50%);width:400px;height:400px;background:radial-gradient(circle,rgba(16,185,129,0.07) 0%,transparent 65%);pointer-events:none;z-index:0}
+.progress-bar{height:2px;background:#1a2e28;position:relative;z-index:2}
+.progress-fill{height:100%;background:linear-gradient(90deg,#10b981,#34d399);transition:width 0.4s ease}
+.screen{min-height:560px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;z-index:1;position:relative}
+.step-label{font-size:11px;letter-spacing:0.12em;color:#10b981;text-transform:uppercase;margin-bottom:8px;text-align:center}
+.headline{font-size:22px;font-weight:500;text-align:center;color:#e2f0eb;line-height:1.35;margin-bottom:8px}
+.subtext{font-size:14px;color:#6b8f7e;text-align:center;line-height:1.6;margin-bottom:28px;max-width:320px}
+.btn-primary{background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:12px;padding:14px 36px;font-size:15px;font-weight:500;cursor:pointer;width:100%;max-width:320px;transition:transform 0.15s,opacity 0.15s;margin-top:8px}
+.btn-primary:hover{opacity:0.9;transform:translateY(-1px)}
+.btn-secondary{background:transparent;color:#6b8f7e;border:1px solid #1e3329;border-radius:12px;padding:12px 36px;font-size:14px;cursor:pointer;width:100%;max-width:320px;margin-top:8px;transition:border-color 0.2s,color 0.2s}
+.btn-secondary:hover{border-color:#10b981;color:#10b981}
+.cards-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:100%;max-width:320px;margin-bottom:20px}
+.card-opt{background:#111d18;border:1px solid #1e3329;border-radius:10px;padding:12px 8px;text-align:center;cursor:pointer;font-size:13px;color:#8aad9b;transition:all 0.2s}
+.card-opt:hover{border-color:#10b981;color:#e2f0eb}
+.card-opt.selected{background:#0d2e22;border-color:#10b981;color:#10b981}
+.life-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:100%;max-width:320px;margin-bottom:20px}
+.life-card{background:#111d18;border:1px solid #1e3329;border-radius:10px;padding:12px 8px;text-align:center;cursor:pointer;font-size:12px;color:#8aad9b;transition:all 0.2s;line-height:1.3}
+.life-card:hover{border-color:#10b981;color:#e2f0eb}
+.life-card.selected{background:#0d2e22;border-color:#10b981;color:#10b981;font-weight:500}
+.chips-wrap{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:320px;margin-bottom:20px}
+.chip{background:#111d18;border:1px solid #1e3329;border-radius:20px;padding:8px 16px;font-size:13px;color:#8aad9b;cursor:pointer;transition:all 0.2s}
+.chip:hover{border-color:#10b981;color:#e2f0eb}
+.chip.selected{background:#0d2e22;border-color:#10b981;color:#10b981}
+.body-map-wrap{position:relative;width:160px;height:300px;margin:0 auto 20px}
+.body-svg{width:100%;height:100%}
+.body-part{cursor:pointer;transition:fill 0.2s;fill:#1e3329;stroke:#2e5045;stroke-width:1.5}
+.body-part:hover{fill:#1e4035}
+.body-part.selected{fill:#10b981;stroke:#34d399}
+.slider-wrap{width:100%;max-width:320px;margin-bottom:8px}
+.intensity-slider{width:100%;appearance:none;height:4px;background:#1e3329;border-radius:4px;outline:none;accent-color:#10b981}
+.intensity-value{font-size:48px;font-weight:500;color:#10b981;text-align:center;margin-bottom:4px}
+.intensity-desc{font-size:13px;color:#6b8f7e;text-align:center;margin-bottom:16px;min-height:20px}
+.field-input{background:#111d18;border:1px solid #1e3329;border-radius:10px;padding:12px 16px;color:#e2f0eb;font-size:14px;width:100%;max-width:320px;margin-bottom:12px;outline:none;font-family:inherit}
+.field-input:focus{border-color:#10b981}
+textarea.field-input{resize:none;min-height:80px}
+.or-divider{font-size:12px;color:#3a5a4a;text-align:center;margin:4px 0 12px;width:100%;max-width:320px}
+.completion-icon{width:72px;height:72px;border-radius:50%;background:#0d2e22;border:2px solid #10b981;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 24px;color:#10b981}
+.error-msg{font-size:13px;color:#f87171;margin-top:8px;text-align:center}
+.auth-wrap{width:100%;max-width:320px;display:flex;flex-direction:column;align-items:center}
+.auth-toggle{font-size:13px;color:#6b8f7e;margin-top:16px;cursor:pointer;text-align:center}
+.auth-toggle span{color:#10b981;text-decoration:underline}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="radar-bg"></div>
+  <div class="progress-bar"><div class="progress-fill" id="progress" style="width:0%"></div></div>
+  <div class="screen" id="screen"></div>
+</div>
+<script>
+const SUPABASE_URL='https://kuldsqxsbtqmvrwmptlx.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1bGRzcXhzYnRxbXZyd21wdGx4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjU2NjIsImV4cCI6MjA4OTM0MTY2Mn0.XKElj__OT4NJigifEEc-ZFdubvYywI_hPxIOjys1wkc';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const TRIGGERS=['criticism','conflict','pressure','rejection','uncertainty','other'];
+const LIFE_AREAS=['Work','Relationships','Family','Parenting','Money','Health','Identity','Past','Spirituality','Appearance','Intellect','Vision'];
+const SENSATIONS=['pressure','tension','heat','cold','tingling','pain','numbness','contraction','shaking'];
+const REGULATION=['breathing','meditation','walk','training','music','conversation','journaling','pause','nothing yet'];
+const BODY_PARTS=[
+  {id:'head',cx:80,cy:28,rx:20,ry:22},
+  {id:'throat',cx:80,cy:56,rx:9,ry:9},
+  {id:'chest',cx:80,cy:92,rx:28,ry:26},
+  {id:'stomach',cx:80,cy:132,rx:24,ry:20},
+  {id:'pelvis',cx:80,cy:166,rx:26,ry:16},
+  {id:'l_shoulder',cx:46,cy:76,rx:14,ry:13},
+  {id:'r_shoulder',cx:114,cy:76,rx:14,ry:13},
+  {id:'l_arm',cx:32,cy:118,rx:11,ry:26},
+  {id:'r_arm',cx:128,cy:118,rx:11,ry:26},
+  {id:'l_hand',cx:28,cy:156,rx:9,ry:12},
+  {id:'r_hand',cx:132,cy:156,rx:9,ry:12},
+  {id:'l_leg',cx:62,cy:214,rx:14,ry:30},
+  {id:'r_leg',cx:98,cy:214,rx:14,ry:30},
+  {id:'l_foot',cx:58,cy:258,rx:13,ry:9},
+  {id:'r_foot',cx:102,cy:258,rx:13,ry:9}
+];
+const INT_LABELS={1:'barely noticed',3:'mild reaction',5:'clear emotional shift',7:'strong somatic reaction',10:'overwhelming'};
+let step=0,authMode='login',currentUser=null;
+let data={triggerText:'',triggerCard:'',lifeArea:'',bodyParts:[],sensations:[],intensity:5,date:new Date().toISOString().split('T')[0],time:'',regulation:[]};
+
+async function init(){const{data:{user}}=await sb.auth.getUser();currentUser=user;render();}
+
+function setProgress(s){document.getElementById('progress').style.width=(s===0?0:Math.round(s/9*100))+'%';}
+
+function render(){
+  const sc=document.getElementById('screen');
+  sc.style.opacity='0';sc.style.transform='translateX(16px)';
+  setTimeout(()=>{
+    sc.innerHTML=currentUser?getStep():getAuth();
+    sc.style.transition='opacity 0.22s ease,transform 0.22s ease';
+    sc.style.opacity='1';sc.style.transform='translateX(0)';
+  },160);
+}
+
+function getAuth(){
+  setProgress(0);
+  return`<div class="step-label">GrowthRadar</div>
+  <div class="headline">${authMode==='login'?'Welcome back':'Create account'}</div>
+  <div class="subtext">${authMode==='login'?'Sign in to your Trigger Tracker':'Start your emotional awareness journey'}</div>
+  <div class="auth-wrap">
+    ${authMode==='signup'?'<input class="field-input" id="aname" type="text" placeholder="Your name" />':''}
+    <input class="field-input" id="aemail" type="email" placeholder="Email address" />
+    <input class="field-input" id="apass" type="password" placeholder="Password" />
+    <button class="btn-primary" onclick="doAuth()">${authMode==='login'?'Sign In':'Create Account'}</button>
+    <div id="aerr" class="error-msg"></div>
+    <div class="auth-toggle" onclick="toggleAuth()">${authMode==='login'?"Don't have an account? <span>Sign up</span>":"Already have an account? <span>Sign in</span>"}</div>
+  </div>`;}
+
+function getStep(){
+  setProgress(step);
+  if(step===0)return`<div class="step-label">GrowthRadar — Trigger Check-In</div><div class="headline" style="font-size:24px;margin-bottom:12px;">Catch the moment<br>before it disappears.</div><div class="subtext">Log one trigger, one body reaction, one insight.</div><button class="btn-primary" onclick="next()">Start Check-In</button>`;
+  if(step===1)return`<div class="step-label">Step 1 of 8 — Trigger</div><div class="headline">What triggered you?</div><div class="subtext">Choose a category or describe it.</div><div class="cards-grid">${TRIGGERS.map(t=>`<div class="card-opt${data.triggerCard===t?' selected':''}" onclick="selCard('${t}')">${t}</div>`).join('')}</div><div class="or-divider">— or describe it —</div><textarea class="field-input" id="ttext" placeholder="What happened...">${data.triggerText}</textarea><button class="btn-primary" onclick="saveTrigger()">Continue</button>`;
+  if(step===2)return`<div class="step-label">Step 2 of 8 — Life Area</div><div class="headline">Which area of life<br>did this affect most?</div><div class="life-grid">${LIFE_AREAS.map(a=>`<div class="life-card${data.lifeArea===a?' selected':''}" onclick="selLife('${a}')">${a}</div>`).join('')}</div><button class="btn-primary" onclick="next()">Continue</button>`;
+  if(step===3)return`<div class="step-label">Step 3 of 8 — Body Reaction</div><div class="headline">Where did your<br>body react?</div><div class="subtext">Tap all areas that responded.</div><div class="body-map-wrap"><svg class="body-svg" viewBox="0 0 160 275" xmlns="http://www.w3.org/2000/svg">${BODY_PARTS.map(p=>`<ellipse class="body-part${data.bodyParts.includes(p.id)?' selected':''}" id="bp-${p.id}" cx="${p.cx}" cy="${p.cy}" rx="${p.rx}" ry="${p.ry}" onclick="toggleBody('${p.id}')" />`).join('')}</svg></div><button class="btn-primary" onclick="next()">Continue</button>`;
+  if(step===4)return`<div class="step-label">Step 4 of 8 — Sensation</div><div class="headline">What did it feel like?</div><div class="chips-wrap">${SENSATIONS.map(s=>`<div class="chip${data.sensations.includes(s)?' selected':''}" onclick="toggleChip('sensations','${s}')">${s}</div>`).join('')}</div><button class="btn-primary" onclick="next()">Continue</button>`;
+  if(step===5)return`<div class="step-label">Step 5 of 8 — Intensity</div><div class="headline">How strong was<br>the reaction?</div><div class="intensity-value" id="ival">${data.intensity}</div><div class="intensity-desc" id="idesc">${INT_LABELS[data.intensity]||''}</div><div class="slider-wrap"><input type="range" class="intensity-slider" id="islider" min="1" max="10" step="1" value="${data.intensity}" oninput="updInt(this.value)"/><div style="display:flex;justify-content:space-between;font-size:11px;color:#3a5a4a;margin-top:4px;"><span>1</span><span>10</span></div></div><button class="btn-primary" onclick="next()" style="margin-top:20px;">Continue</button>`;
+  if(step===6)return`<div class="step-label">Step 6 of 8 — When</div><div class="headline">When did it happen?</div><input type="date" class="field-input" id="edate" value="${data.date}" onchange="data.date=this.value"/><input type="time" class="field-input" id="etime" value="${data.time}" onchange="data.time=this.value" placeholder="Time (optional)"/><button class="btn-primary" onclick="next()">Continue</button>`;
+  if(step===7)return`<div class="step-label">Step 7 of 8 — Regulation</div><div class="headline">What helped you<br>regulate it?</div><div class="chips-wrap">${REGULATION.map(r=>`<div class="chip${data.regulation.includes(r)?' selected':''}" onclick="toggleChip('regulation','${r}')">${r}</div>`).join('')}</div><button class="btn-primary" onclick="saveLog()">Continue</button>`;
+  if(step===8)return`<div class="completion-icon">✓</div><div class="headline">Trigger recorded.</div><div class="subtext">You noticed the trigger, the body reaction and the life area. Over time, your GrowthRadar will reveal repeating patterns.</div><button class="btn-primary" onclick="resetFlow()">Log Another Trigger</button><button class="btn-secondary" onclick="showDashboard()">View My Radar</button>`;
+  return'';
+}
+
+function toggleAuth(){authMode=authMode==='login'?'signup':'login';render();}
+
+async function doAuth(){
+  const email=document.getElementById('aemail')?.value?.trim();
+  const pass=document.getElementById('apass')?.value;
+  const err=document.getElementById('aerr');
+  if(!email||!pass){err.textContent='Please fill in all fields.';return;}
+  let res;
+  if(authMode==='signup'){
+    const name=document.getElementById('aname')?.value?.trim()||'';
+    res=await sb.auth.signUp({email,password:pass,options:{data:{name}}});
+  }else{
+    res=await sb.auth.signInWithPassword({email,password:pass});
+  }
+  if(res.error){err.textContent=res.error.message;return;}
+  currentUser=res.data.user;render();
+}
+
+function selCard(v){data.triggerCard=data.triggerCard===v?'':v;document.querySelectorAll('.card-opt').forEach(e=>e.classList.toggle('selected',e.textContent===v&&data.triggerCard===v));}
+function saveTrigger(){data.triggerText=document.getElementById('ttext')?.value||'';next();}
+function selLife(v){data.lifeArea=v;document.querySelectorAll('.life-card').forEach(e=>e.classList.toggle('selected',e.textContent===v));}
+function toggleBody(id){if(data.bodyParts.includes(id)){data.bodyParts=data.bodyParts.filter(x=>x!==id);}else{data.bodyParts.push(id);}const el=document.getElementById('bp-'+id);if(el)el.classList.toggle('selected',data.bodyParts.includes(id));}
+function toggleChip(key,val){if(data[key].includes(val)){data[key]=data[key].filter(x=>x!==val);}else{data[key].push(val);}document.querySelectorAll('.chip').forEach(e=>{if(e.textContent===val)e.classList.toggle('selected',data[key].includes(val));});}
+function updInt(v){data.intensity=parseInt(v);const iv=document.getElementById('ival');const id=document.getElementById('idesc');if(iv)iv.textContent=data.intensity;if(id)id.textContent=INT_LABELS[data.intensity]||'';}
+function next(){step=Math.min(step+1,8);render();}
+
+async function saveLog(){
+  if(!currentUser)return;
+  const btn=document.querySelector('.btn-primary');
+  if(btn){btn.textContent='Saving...';btn.disabled=true;}
+  const{error}=await sb.from('trigger_logs').insert({
+    user_id:currentUser.id,
+    trigger_text:data.triggerText,
+    trigger_card:data.triggerCard,
+    life_area:data.lifeArea,
+    body_parts:data.bodyParts.join(','),
+    sensations:data.sensations.join(','),
+    intensity:data.intensity,
+    event_date:data.date,
+    event_time:data.time||null,
+    regulation:data.regulation.join(',')
+  });
+  if(error){if(btn){btn.textContent='Continue';btn.disabled=false;}const e=document.createElement('div');e.className='error-msg';e.textContent='Error: '+error.message;btn?.parentNode?.appendChild(e);return;}
+  next();
+}
+
+function resetFlow(){step=0;data={triggerText:'',triggerCard:'',lifeArea:'',bodyParts:[],sensations:[],intensity:5,date:new Date().toISOString().split('T')[0],time:'',regulation:[]};render();}
+function showDashboard(){alert('Coach dashboard — coming soon!');}
+
+init();
+</script>
+</body>
+</html>
