@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Coach Dashboard — GrowthRadar</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/chart.js@4/dist/chart.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{min-height:100vh;background:#0a0d0f;color:#e2f0eb;font-family:system-ui,sans-serif;padding:24px}
@@ -43,7 +43,6 @@ body{min-height:100vh;background:#0a0d0f;color:#e2f0eb;font-family:system-ui,san
 .filter-chip{background:#111d18;border:1px solid #1e3329;border-radius:20px;padding:6px 14px;font-size:12px;color:#6b8f7e;cursor:pointer;transition:all 0.2s}
 .filter-chip:hover{border-color:#10b981;color:#10b981}
 .filter-chip.active{background:#0d2e22;border-color:#10b981;color:#10b981}
-.client-select{background:#111d18;border:1px solid #1e3329;border-radius:10px;padding:8px 14px;color:#e2f0eb;font-size:13px;outline:none;cursor:pointer}
 </style>
 </head>
 <body>
@@ -52,98 +51,172 @@ body{min-height:100vh;background:#0a0d0f;color:#e2f0eb;font-family:system-ui,san
 const SUPABASE_URL='https://kuldsqxsbtqmvrwmptlx.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1bGRzcXhzYnRxbXZyd21wdGx4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjU2NjIsImV4cCI6MjA4OTM0MTY2Mn0.XKElj__OT4NJigifEEc-ZFdubvYywI_hPxIOjys1wkc';
 const COACH_EMAIL='dzubak.zfp@gmail.com';
-const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 
-let currentUser=null,logs=[],filteredLogs=[],activeFilter='all';
-let charts={};
-
-async function init(){
-  const{data:{user}}=await sb.auth.getUser();
-  currentUser=user;
-  if(!user){renderAuth();return;}
-  if(user.email!==COACH_EMAIL){renderNoAccess();return;}
-  await loadLogs();
-  renderDashboard();
-}
-
-async function loadLogs(){
-  const{data,error}=await sb.from('trigger_logs').select('*').order('created_at',{ascending:false});
-  if(!error)logs=data||[];
-  filteredLogs=[...logs];
-}
-
-function renderAuth(){
-  document.getElementById('root').innerHTML=`
-  <div class="auth-screen">
-    <div class="auth-card">
-      <div class="auth-title">Coach Dashboard</div>
-      <div class="auth-sub">GrowthRadar — prístup len pre coachov</div>
-      <input class="field-input" id="aemail" type="email" placeholder="E-mail" />
-      <input class="field-input" id="apass" type="password" placeholder="Heslo" />
-      <button class="btn-primary" onclick="doLogin()">Prihlásiť sa</button>
-      <div id="aerr" class="error-msg"></div>
-    </div>
-  </div>`;}
-
-function renderNoAccess(){
-  document.getElementById('root').innerHTML=`
-  <div class="auth-screen">
-    <div class="auth-card">
-      <div class="auth-title">Prístup zamietnutý</div>
-      <div class="no-access">Tento dashboard je prístupný len pre hlavného coachova.</div>
-      <button class="btn-primary" style="margin-top:12px" onclick="doLogout()">Odhlásiť sa</button>
-    </div>
-  </div>`;}
-
-async function doLogin(){
-  const email=document.getElementById('aemail').value.trim();
-  const pass=document.getElementById('apass').value;
-  const err=document.getElementById('aerr');
-  const{data,error}=await sb.auth.signInWithPassword({email,password:pass});
-  if(error){err.textContent=error.message;return;}
-  if(data.user.email!==COACH_EMAIL){err.textContent='Prístup zamietnutý.';await sb.auth.signOut();return;}
-  currentUser=data.user;
-  await loadLogs();
-  renderDashboard();
-}
-
-async function doLogout(){
-  await sb.auth.signOut();
-  currentUser=null;
-  renderAuth();
-}
-
-function getIntensityColor(v){
-  if(v<=3)return'#10b981';
-  if(v<=6)return'#f59e0b';
-  return'#ef4444';
-}
-
-function applyFilter(f){
-  activeFilter=f;
-  if(f==='all')filteredLogs=[...logs];
-  else if(f==='high')filteredLogs=logs.filter(l=>l.intensity>=7);
-  else if(f==='week'){
-    const week=new Date();week.setDate(week.getDate()-7);
-    filteredLogs=logs.filter(l=>new Date(l.created_at)>=week);
+window.addEventListener('load', function() {
+  if(typeof supabase === 'undefined') {
+    document.getElementById('root').innerHTML='<div style="color:#f87171;text-align:center;padding:40px">Chyba: Supabase sa nenačítalo. Skontroluj internetové pripojenie.</div>';
+    return;
   }
-  renderDashboard();
-}
+  const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+  let logs=[],filteredLogs=[],activeFilter='all';
 
-function renderDashboard(){
-  const total=filteredLogs.length;
-  const avgInt=total?Math.round(filteredLogs.reduce((a,l)=>a+l.intensity,0)/total):0;
-  const high=filteredLogs.filter(l=>l.intensity>=7).length;
-  const uniqueUsers=new Set(filteredLogs.map(l=>l.user_id)).size;
+  async function init(){
+    const{data:{user}}=await sb.auth.getUser();
+    if(!user){renderAuth();return;}
+    if(user.email!==COACH_EMAIL){renderNoAccess(user.email);return;}
+    await loadLogs(user.email);
+    renderDashboard();
+  }
 
-  // trigger counts
-  const triggerCount={};
-  filteredLogs.forEach(l=>{
-    if(l.trigger_card){l.trigger_card.split(',').forEach(t=>{const k=t.trim();if(k)triggerCount[k]=(triggerCount[k]||0)+1;});}
-  });
-  const topTriggers=Object.entries(triggerCount).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  async function loadLogs(){
+    const{data,error}=await sb.from('trigger_logs').select('*').order('created_at',{ascending:false});
+    if(!error&&data)logs=data;
+    filteredLogs=[...logs];
+  }
 
-  // life area counts
-  const lifeCount={};
-  filteredLogs.forEach(l=>{
-    if(l.life_area){l.life_area.split(',').forEach(a=>{const k=a.trim();if(k)
+  function renderAuth(){
+    document.getElementById('root').innerHTML=`
+    <div class="auth-screen">
+      <div class="auth-card">
+        <div class="auth-title">Coach Dashboard</div>
+        <div class="auth-sub">GrowthRadar — prístup len pre coachov</div>
+        <input class="field-input" id="aemail" type="email" placeholder="E-mail" />
+        <input class="field-input" id="apass" type="password" placeholder="Heslo" />
+        <button class="btn-primary" onclick="doLogin()">Prihlásiť sa</button>
+        <div id="aerr" class="error-msg"></div>
+      </div>
+    </div>`;
+  }
+
+  function renderNoAccess(email){
+    document.getElementById('root').innerHTML=`
+    <div class="auth-screen">
+      <div class="auth-card">
+        <div class="auth-title">Prístup zamietnutý</div>
+        <div class="no-access">Účet ${email} nemá prístup k coach dashboardu.</div>
+        <button class="btn-primary" style="margin-top:12px" onclick="doLogout()">Odhlásiť sa</button>
+      </div>
+    </div>`;
+  }
+
+  window.doLogin=async function(){
+    const email=document.getElementById('aemail').value.trim();
+    const pass=document.getElementById('apass').value;
+    const err=document.getElementById('aerr');
+    if(!email||!pass){err.textContent='Vyplň všetky polia.';return;}
+    const{data,error}=await sb.auth.signInWithPassword({email,password:pass});
+    if(error){err.textContent=error.message;return;}
+    if(data.user.email!==COACH_EMAIL){err.textContent='Prístup zamietnutý.';await sb.auth.signOut();return;}
+    await loadLogs();
+    renderDashboard();
+  };
+
+  window.doLogout=async function(){
+    await sb.auth.signOut();
+    renderAuth();
+  };
+
+  window.applyFilter=function(f){
+    activeFilter=f;
+    if(f==='all')filteredLogs=[...logs];
+    else if(f==='high')filteredLogs=logs.filter(l=>l.intensity>=7);
+    else if(f==='week'){
+      const week=new Date();week.setDate(week.getDate()-7);
+      filteredLogs=logs.filter(l=>new Date(l.created_at)>=week);
+    }
+    renderDashboard();
+  };
+
+  function getIntensityColor(v){
+    if(v<=3)return'#10b981';
+    if(v<=6)return'#f59e0b';
+    return'#ef4444';
+  }
+
+  function renderDashboard(){
+    const total=filteredLogs.length;
+    const avgInt=total?Math.round(filteredLogs.reduce((a,l)=>a+l.intensity,0)/total):0;
+    const high=filteredLogs.filter(l=>l.intensity>=7).length;
+    const uniqueUsers=new Set(filteredLogs.map(l=>l.user_id)).size;
+
+    const triggerCount={};
+    filteredLogs.forEach(l=>{
+      if(l.trigger_card){l.trigger_card.split(',').forEach(t=>{const k=t.trim();if(k)triggerCount[k]=(triggerCount[k]||0)+1;});}
+    });
+    const topTriggers=Object.entries(triggerCount).sort((a,b)=>b[1]-a[1]).slice(0,6);
+
+    const lifeCount={};
+    filteredLogs.forEach(l=>{
+      if(l.life_area){l.life_area.split(',').forEach(a=>{const k=a.trim();if(k)lifeCount[k]=(lifeCount[k]||0)+1;});}
+    });
+    const topLife=Object.entries(lifeCount).sort((a,b)=>b[1]-a[1]).slice(0,6);
+
+    const byDate={};
+    filteredLogs.forEach(l=>{
+      const d=l.event_date||l.created_at?.split('T')[0];
+      if(d){if(!byDate[d])byDate[d]=[];byDate[d].push(l.intensity);}
+    });
+    const dateLabels=Object.keys(byDate).sort().slice(-14);
+    const dateAvgs=dateLabels.map(d=>Math.round(byDate[d].reduce((a,b)=>a+b,0)/byDate[d].length));
+
+    document.getElementById('root').innerHTML=`
+    <div class="top-bar">
+      <div class="logo">GrowthRadar — Coach Dashboard</div>
+      <button class="logout-btn" onclick="doLogout()">Odhlásiť sa</button>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">Celkom záznamov</div><div class="stat-value">${total}</div></div>
+      <div class="stat-card"><div class="stat-label">Priem. intenzita</div><div class="stat-value">${avgInt}</div></div>
+      <div class="stat-card"><div class="stat-label">Silné reakcie (7+)</div><div class="stat-value" style="color:#ef4444">${high}</div></div>
+      <div class="stat-card"><div class="stat-label">Klienti</div><div class="stat-value">${uniqueUsers}</div></div>
+    </div>
+    <div class="filter-bar">
+      <div class="filter-chip${activeFilter==='all'?' active':''}" onclick="applyFilter('all')">Všetky</div>
+      <div class="filter-chip${activeFilter==='week'?' active':''}" onclick="applyFilter('week')">Posledný týždeň</div>
+      <div class="filter-chip${activeFilter==='high'?' active':''}" onclick="applyFilter('high')">Silné reakcie (7+)</div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-title">Najčastejšie triggery</div>
+        <div class="chart-wrap"><canvas id="chartTriggers"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Oblasti života</div>
+        <div class="chart-wrap"><canvas id="chartLife"></canvas></div>
+      </div>
+      <div class="chart-card" style="grid-column:1/-1">
+        <div class="chart-title">Intenzita v čase</div>
+        <div class="chart-wrap"><canvas id="chartTime"></canvas></div>
+      </div>
+    </div>
+    <div class="logs-wrap">
+      <div class="logs-title">Záznamy (${filteredLogs.length})</div>
+      ${filteredLogs.length===0?'<div class="empty">Žiadne záznamy</div>':
+        filteredLogs.map(l=>`
+        <div class="log-row">
+          <div><div class="log-label">Trigger</div><div class="log-field">${l.trigger_card||l.trigger_text||'—'}</div></div>
+          <div><div class="log-label">Oblasť života</div><div class="log-field">${l.life_area||'—'}</div></div>
+          <div><div class="log-label">Regulácia</div><div class="log-field">${l.regulation||'—'}</div></div>
+          <div><div class="log-label">Dátum</div><div class="log-field">${l.event_date||l.created_at?.split('T')[0]||'—'}</div></div>
+          <div><div class="log-label">Intenzita</div><div class="intensity-badge" style="background:${getIntensityColor(l.intensity)}22;color:${getIntensityColor(l.intensity)};border:1px solid ${getIntensityColor(l.intensity)}44">${l.intensity}/10</div></div>
+        </div>`).join('')}
+    </div>`;
+
+    const chartOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#6b8f7e',font:{size:11}},grid:{color:'#1a2e28'}},y:{ticks:{color:'#6b8f7e',font:{size:11}},grid:{color:'#1a2e28'}}}};
+
+    if(topTriggers.length&&document.getElementById('chartTriggers')){
+      new Chart(document.getElementById('chartTriggers'),{type:'bar',data:{labels:topTriggers.map(x=>x[0]),datasets:[{data:topTriggers.map(x=>x[1]),backgroundColor:'#10b98133',borderColor:'#10b981',borderWidth:1.5,borderRadius:6}]},options:chartOpts});
+    }
+    if(topLife.length&&document.getElementById('chartLife')){
+      new Chart(document.getElementById('chartLife'),{type:'bar',data:{labels:topLife.map(x=>x[0]),datasets:[{data:topLife.map(x=>x[1]),backgroundColor:'#6366f133',borderColor:'#818cf8',borderWidth:1.5,borderRadius:6}]},options:chartOpts});
+    }
+    if(dateLabels.length&&document.getElementById('chartTime')){
+      new Chart(document.getElementById('chartTime'),{type:'line',data:{labels:dateLabels,datasets:[{data:dateAvgs,borderColor:'#10b981',backgroundColor:'#10b98122',borderWidth:2,pointBackgroundColor:'#10b981',tension:0.4,fill:true}]},options:{...chartOpts,scales:{...chartOpts.scales,y:{...chartOpts.scales.y,min:1,max:10}}}});
+    }
+  }
+
+  init();
+});
+</script>
+</body>
+</html>
