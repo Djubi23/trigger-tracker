@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coach Dashboard — GrowthRadar</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;background:#0a0d0f;color:#e2f0eb;font-family:system-ui,sans-serif;padding:24px}
+.top-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:32px;max-width:1100px;margin-left:auto;margin-right:auto}
+.logo{font-size:11px;letter-spacing:0.12em;color:#10b981;text-transform:uppercase;font-weight:500}
+.logout-btn{background:transparent;border:1px solid #1e3329;border-radius:8px;color:#6b8f7e;padding:6px 14px;font-size:12px;cursor:pointer;transition:all 0.2s}
+.logout-btn:hover{border-color:#10b981;color:#10b981}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;max-width:1100px;margin:0 auto 32px}
+.stat-card{background:#111d18;border:1px solid #1e3329;border-radius:12px;padding:16px 20px}
+.stat-label{font-size:11px;color:#6b8f7e;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px}
+.stat-value{font-size:28px;font-weight:500;color:#10b981}
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1100px;margin:0 auto 32px}
+.chart-card{background:#111d18;border:1px solid #1e3329;border-radius:12px;padding:20px}
+.chart-title{font-size:13px;color:#8aad9b;margin-bottom:16px;font-weight:500}
+.chart-wrap{position:relative;height:200px}
+.logs-wrap{max-width:1100px;margin:0 auto}
+.logs-title{font-size:13px;color:#8aad9b;margin-bottom:12px;font-weight:500}
+.log-row{background:#111d18;border:1px solid #1e3329;border-radius:10px;padding:14px 16px;margin-bottom:8px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr 80px;gap:12px;align-items:center}
+.log-row:hover{border-color:#1e4a38}
+.log-field{font-size:12px;color:#e2f0eb}
+.log-label{font-size:10px;color:#3a5a4a;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px}
+.intensity-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:500;text-align:center}
+.auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+.auth-card{background:#111d18;border:1px solid #1e3329;border-radius:16px;padding:32px;width:100%;max-width:360px;display:flex;flex-direction:column;gap:12px}
+.auth-title{font-size:18px;font-weight:500;color:#e2f0eb;margin-bottom:4px;text-align:center}
+.auth-sub{font-size:13px;color:#6b8f7e;text-align:center;margin-bottom:8px}
+.field-input{background:#0d1117;border:1px solid #1e3329;border-radius:10px;padding:12px 16px;color:#e2f0eb;font-size:14px;width:100%;outline:none;font-family:inherit}
+.field-input:focus{border-color:#10b981}
+.btn-primary{background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:500;cursor:pointer;width:100%;transition:opacity 0.15s}
+.btn-primary:hover{opacity:0.9}
+.error-msg{font-size:13px;color:#f87171;text-align:center}
+.no-access{text-align:center;color:#f87171;font-size:14px;margin-top:12px}
+.empty{text-align:center;color:#3a5a4a;font-size:14px;padding:32px}
+.filter-bar{display:flex;gap:8px;max-width:1100px;margin:0 auto 16px;flex-wrap:wrap}
+.filter-chip{background:#111d18;border:1px solid #1e3329;border-radius:20px;padding:6px 14px;font-size:12px;color:#6b8f7e;cursor:pointer;transition:all 0.2s}
+.filter-chip:hover{border-color:#10b981;color:#10b981}
+.filter-chip.active{background:#0d2e22;border-color:#10b981;color:#10b981}
+.client-select{background:#111d18;border:1px solid #1e3329;border-radius:10px;padding:8px 14px;color:#e2f0eb;font-size:13px;outline:none;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const SUPABASE_URL='https://kuldsqxsbtqmvrwmptlx.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1bGRzcXhzYnRxbXZyd21wdGx4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NjU2NjIsImV4cCI6MjA4OTM0MTY2Mn0.XKElj__OT4NJigifEEc-ZFdubvYywI_hPxIOjys1wkc';
+const COACH_EMAIL='dzubak.zfp@gmail.com';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+let currentUser=null,logs=[],filteredLogs=[],activeFilter='all';
+let charts={};
+
+async function init(){
+  const{data:{user}}=await sb.auth.getUser();
+  currentUser=user;
+  if(!user){renderAuth();return;}
+  if(user.email!==COACH_EMAIL){renderNoAccess();return;}
+  await loadLogs();
+  renderDashboard();
+}
+
+async function loadLogs(){
+  const{data,error}=await sb.from('trigger_logs').select('*').order('created_at',{ascending:false});
+  if(!error)logs=data||[];
+  filteredLogs=[...logs];
+}
+
+function renderAuth(){
+  document.getElementById('root').innerHTML=`
+  <div class="auth-screen">
+    <div class="auth-card">
+      <div class="auth-title">Coach Dashboard</div>
+      <div class="auth-sub">GrowthRadar — prístup len pre coachov</div>
+      <input class="field-input" id="aemail" type="email" placeholder="E-mail" />
+      <input class="field-input" id="apass" type="password" placeholder="Heslo" />
+      <button class="btn-primary" onclick="doLogin()">Prihlásiť sa</button>
+      <div id="aerr" class="error-msg"></div>
+    </div>
+  </div>`;}
+
+function renderNoAccess(){
+  document.getElementById('root').innerHTML=`
+  <div class="auth-screen">
+    <div class="auth-card">
+      <div class="auth-title">Prístup zamietnutý</div>
+      <div class="no-access">Tento dashboard je prístupný len pre hlavného coachova.</div>
+      <button class="btn-primary" style="margin-top:12px" onclick="doLogout()">Odhlásiť sa</button>
+    </div>
+  </div>`;}
+
+async function doLogin(){
+  const email=document.getElementById('aemail').value.trim();
+  const pass=document.getElementById('apass').value;
+  const err=document.getElementById('aerr');
+  const{data,error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(error){err.textContent=error.message;return;}
+  if(data.user.email!==COACH_EMAIL){err.textContent='Prístup zamietnutý.';await sb.auth.signOut();return;}
+  currentUser=data.user;
+  await loadLogs();
+  renderDashboard();
+}
+
+async function doLogout(){
+  await sb.auth.signOut();
+  currentUser=null;
+  renderAuth();
+}
+
+function getIntensityColor(v){
+  if(v<=3)return'#10b981';
+  if(v<=6)return'#f59e0b';
+  return'#ef4444';
+}
+
+function applyFilter(f){
+  activeFilter=f;
+  if(f==='all')filteredLogs=[...logs];
+  else if(f==='high')filteredLogs=logs.filter(l=>l.intensity>=7);
+  else if(f==='week'){
+    const week=new Date();week.setDate(week.getDate()-7);
+    filteredLogs=logs.filter(l=>new Date(l.created_at)>=week);
+  }
+  renderDashboard();
+}
+
+function renderDashboard(){
+  const total=filteredLogs.length;
+  const avgInt=total?Math.round(filteredLogs.reduce((a,l)=>a+l.intensity,0)/total):0;
+  const high=filteredLogs.filter(l=>l.intensity>=7).length;
+  const uniqueUsers=new Set(filteredLogs.map(l=>l.user_id)).size;
+
+  // trigger counts
+  const triggerCount={};
+  filteredLogs.forEach(l=>{
+    if(l.trigger_card){l.trigger_card.split(',').forEach(t=>{const k=t.trim();if(k)triggerCount[k]=(triggerCount[k]||0)+1;});}
+  });
+  const topTriggers=Object.entries(triggerCount).sort((a,b)=>b[1]-a[1]).slice(0,6);
+
+  // life area counts
+  const lifeCount={};
+  filteredLogs.forEach(l=>{
+    if(l.life_area){l.life_area.split(',').forEach(a=>{const k=a.trim();if(k)
